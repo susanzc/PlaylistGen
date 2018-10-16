@@ -51,7 +51,6 @@ class App extends Component {
     let that = this;
     spotifyApi.getMe()
       .then(function (data) {
-        console.log(data);
         let imageUrl = "";
         if (data.body.images[0]) {
           imageUrl = data.body.images[0].url;

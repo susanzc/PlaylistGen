@@ -28,8 +28,10 @@ export default class TopArtists extends React.Component {
   addContent(data) {
     let artists = [];
     data.map((artist, i) => {
+      if (artist != undefined) {
       artists.push(
         <ArtistInfo artist={artist} index={i} />)
+      }
     });
     this.setState({ content: artists });
   }

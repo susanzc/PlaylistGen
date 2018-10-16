@@ -6,6 +6,8 @@ import {
     CardTitle, CardSubtitle, CardDeck, Modal, ModalBody
 } from 'reactstrap';
 import IconButton from '@material-ui/core/IconButton';
+import PlayArrowIcon from '@material-ui/icons/PlayArrow';
+import StopIcon from '@material-ui/icons/Stop';
 import AudiotrackIcon from '@material-ui/icons/Audiotrack';
 import AlbumIcon from '@material-ui/icons/Album';
 import PeopleIcon from '@material-ui/icons/People';
@@ -14,7 +16,7 @@ import Tooltip from '@material-ui/core/Tooltip';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import purple from '@material-ui/core/colors/purple';
 
-const progress = [<center><CircularProgress style={{ color: purple[500] }} thickness={7} /></center>];
+const loading = [<center><CircularProgress style={{ color: purple[500] }} thickness={7} /></center>];
 
 export default class ArtistInfo extends React.Component {
     constructor(props) {
@@ -29,6 +31,7 @@ export default class ArtistInfo extends React.Component {
             relatedModalOpen: false,
             playlistModalOpen: false,
             modalLoading: false,
+            currentSong: null,
             token: sessionStorage.getItem("token")
         };
         this.formatNum = this.formatNum.bind(this);
@@ -44,28 +47,42 @@ export default class ArtistInfo extends React.Component {
         this.addRelated = this.addRelated.bind(this);
         this.generatePlaylist = this.generatePlaylist.bind(this);
         this.addPlaylistTracks = this.addPlaylistTracks.bind(this);
+        this.toggleSong = this.toggleSong.bind(this);
+        this.playSong = this.playSong.bind(this);
     }
 
     toggleTrackModal() {
-        this.setState({ trackModalOpen: !this.state.trackModalOpen })
+        if (this.state.currentSong != null) {
+            this.state.currentSong.pause();
+        }
+        this.setState({ trackModalOpen: !this.state.trackModalOpen, currentSong: null })
     }
 
     toggleAlbumModal() {
-        this.setState({ albumModalOpen: !this.state.albumModalOpen })
+        if (this.state.currentSong != null) {
+            this.state.currentSong.pause();
+        }
+        this.setState({ albumModalOpen: !this.state.albumModalOpen, currentSong: null })
     }
 
     toggleRelatedModal() {
-        this.setState({ relatedModalOpen: !this.state.relatedModalOpen })
+        if (this.state.currentSong != null) {
+            this.state.currentSong.pause();
+        }
+        this.setState({ relatedModalOpen: !this.state.relatedModalOpen, currentSong: null })
     }
 
     togglePlaylistModal() {
-        this.setState({playlistModalOpen: !this.state.playlistModalOpen})
+        if (this.state.currentSong != null) {
+            this.state.currentSong.pause();
+        }
+        this.setState({ playlistModalOpen: !this.state.playlistModalOpen, currentSong: null })
     }
 
     getTracks() {
         this.toggleTrackModal();
         if (this.state.tracks.length == 0) {
-            this.setState({tracks: progress});
+            this.setState({ tracks: loading });
             // may need to customize country code later
             fetch("https://api.spotify.com/v1/artists/" + this.props.artist.id + "/top-tracks?country=CA",
                 {
@@ -75,17 +92,61 @@ export default class ArtistInfo extends React.Component {
                 })
                 .then(data => data.json())
                 .then(res => {
-                    this.addTracks(res.tracks);
+                    this.setState({tracks: res.tracks});
                 });
         }
 
+    }
+
+    toggleSong(songUrl) {
+        if (this.state.currentSong != null) {
+            // pause current song
+            let currentSong = this.state.currentSong;
+            let currentSrc = currentSong.src;
+            currentSong.pause();
+            this.setState({currentSong: null});
+            if (currentSrc != songUrl) {
+                // play new song
+                var audio = new Audio(songUrl);
+                this.setState({currentSong: audio}, this.playSong)
+            }
+        }
+        else {
+            // play new song
+            var audio = new Audio(songUrl);
+            this.setState({currentSong: audio}, this.playSong)
+        }
+    }
+
+    playSong() {
+        var audio = this.state.currentSong;
+        if (audio != null) {
+            audio.play();
+            audio.volume = 0;
+
+            ///https://stackoverflow.com/questions/7942452/javascript-slowly-decrease-volume-of-audio-element/7942472#7942472
+            function fadeVolume(volume, callback) {
+                var factor = 0.98,
+                    speed = 50;
+                if (volume < factor) {
+                    setTimeout(function () {
+                        fadeVolume((audio.volume += 0.02), callback);
+                    }, speed);
+                } else {
+                    (typeof (callback) !== 'function') || callback();
+                }
+            }
+            fadeVolume(audio.volume, function () {
+                //console.log('fade complete');
+            });
+        }
     }
 
     getAlbums() {
         // todo: maybe add track list feature?
         this.toggleAlbumModal();
         if (this.state.albums.length == 0) {
-            this.setState({artists: progress});
+            this.setState({ artists: loading });
             // may need to customize country code later
             fetch("https://api.spotify.com/v1/artists/" + this.props.artist.id + "/albums?market=US&include_groups=album",
                 {
@@ -104,7 +165,7 @@ export default class ArtistInfo extends React.Component {
     getRelated() {
         this.toggleRelatedModal();
         if (this.state.related.length == 0) {
-            this.setState({related: progress});
+            this.setState({ related: loading });
             // may need to customize country code later
             fetch("https://api.spotify.com/v1/artists/" + this.props.artist.id + "/related-artists",
                 {
@@ -123,7 +184,7 @@ export default class ArtistInfo extends React.Component {
     generatePlaylist() {
         this.togglePlaylistModal();
         let that = this;
-        this.setState({playlistTracks: progress});
+        this.setState({ playlistTracks: loading });
         if (that.state.related.length == 0) {
             // may need to customize country code later
             fetch("https://api.spotify.com/v1/artists/" + that.props.artist.id + "/related-artists",
@@ -133,7 +194,7 @@ export default class ArtistInfo extends React.Component {
                     }
                 })
                 .then(data => data.json())
-                .then(async function(res) {
+                .then(async function (res) {
                     let tracks = [];
                     for (var artist of res.artists) {
                         // may need to customize country code later
@@ -147,63 +208,75 @@ export default class ArtistInfo extends React.Component {
                         tracks = tracks.concat(data.tracks);
                     }
                     const shuffled = tracks.sort(() => .5 - Math.random());
-                    let selected = shuffled.slice(0,30); // 30 tracks;
-                    that.addPlaylistTracks(selected);
+                    let selected = shuffled.slice(0, 30); // 30 tracks;
+                    that.setState({playlistTracks: selected});
                 });
         }
         else {
             let tracks = [];
-                    for (var artist of this.state.artists) {
-                        // may need to customize country code later
-                        fetch("https://api.spotify.com/v1/artists/" + artist.id + "/top-tracks?country=CA",
-                            {
-                                headers: {
-                                    'Authorization': 'Bearer ' + this.state.token
-                                }
-                            })
-                            .then(data => data.json())
-                            .then(res => {
-                                tracks = tracks.concat(res.tracks);
-                            });
+            for (var artist of this.state.artists) {
+                // may need to customize country code later
+                fetch("https://api.spotify.com/v1/artists/" + artist.id + "/top-tracks?country=CA",
+                    {
+                        headers: {
+                            'Authorization': 'Bearer ' + this.state.token
                         }
-                    const shuffled = tracks.sort(() => .5 - Math.random());
-                    let selected = shuffled.slice(0,30); // 30 tracks;
-                    this.addPlaylistTracks(selected);
+                    })
+                    .then(data => data.json())
+                    .then(res => {
+                        tracks = tracks.concat(res.tracks);
+                    });
+            }
+            const shuffled = tracks.sort(() => .5 - Math.random());
+            let selected = shuffled.slice(0, 30); // 30 tracks;
+            this.setState({playlistTracks: selected});
         }
 
     }
 
-    addPlaylistTracks(tracks) {
+    addPlaylistTracks() {
+        let tracks = this.state.playlistTracks;
         let plTracks = [];
-        tracks.map((track, i) => {
-            let artists = track.artists.slice(0, 3).map(a => a.name).join(", ");
-            plTracks.push(
-                <div style={{ display: "flex", padding: 5 }}>
-                    <img src={track.album.images[2].url} height={50} width={50} />
-                    <div style={{ paddingLeft: 20 }}>
-                        <div>{track.name}</div>
-                        <div style={{ fontStyle: "italic", fontSize: 12 }}>{artists} - {track.album.name} ({track.album.release_date.split("-")[0]})</div>
-                    </div>
-                </div>)
-        })
-        plTracks = [<div style={{paddingBottom: 20, fontSize: 20}}>Based on Similar Artists</div>].concat(plTracks);
-        this.setState({ playlistTracks: plTracks });
+        if (tracks.length > 0 && tracks != loading) {
+            tracks.map((track, i) => {
+                let artists = track.artists.slice(0, 3).map(a => a.name).join(", ");
+                plTracks.push(
+                    <div style={{ display: "flex", padding: 5 }}>
+                        <img style={{opacity: 0.5}} src={track.album.images[2].url} height={50} width={50} />
+                        <IconButton style={{left: -50, marginRight: -50, color: "black"}} aria-label="Play" onClick={(e) => this.toggleSong(track.preview_url)}>
+                            {this.state.currentSong && this.state.currentSong.src == track.preview_url ? <StopIcon />: <PlayArrowIcon />}</IconButton>
+                        <div style={{ paddingLeft: 20 }}>
+                            <div>{track.name}</div>
+                            <div style={{ fontStyle: "italic", fontSize: 12 }}>{artists} - {track.album.name} ({track.album.release_date.split("-")[0]})</div>
+                        </div>
+                    </div>)
+            })
+            plTracks = [<div style={{ paddingBottom: 20, fontSize: 20 }}>Based on Similar Artists</div>].concat(plTracks);
+        return plTracks;
+        }
+        return tracks;
     }
 
-    addTracks(tracks) {
+    addTracks() {
+        let tracks = this.state.tracks;
         let topTracks = [];
+        if (tracks.length > 0 && tracks != loading) {
         tracks.map((track, i) => {
             topTracks.push(
                 <div style={{ display: "flex", padding: 5 }}>
-                    <img src={track.album.images[2].url} height={50} width={50} />
+                    <img style={{opacity: 0.5}} src={track.album.images[2].url} height={50} width={50} />
+                    <IconButton style={{left: -50, marginRight: -50, color: "black"}} aria-label="Play" onClick={(e) => this.toggleSong(track.preview_url)}>
+                        {this.state.currentSong && this.state.currentSong.src == track.preview_url ? <StopIcon />: <PlayArrowIcon />}</IconButton>
                     <div style={{ paddingLeft: 20 }}>
                         <div>{track.name}</div>
                         <div style={{ fontStyle: "italic", fontSize: 12 }}>{track.album.name} ({track.album.release_date.split("-")[0]})</div>
                     </div>
                 </div>)
         })
-        topTracks = [<div style={{paddingBottom: 20, fontSize: 20}}>Top Tracks</div>].concat(topTracks);
-        this.setState({ tracks: topTracks });
+        topTracks = [<div style={{ paddingBottom: 20, fontSize: 20 }}>Top Tracks</div>].concat(topTracks);
+        return topTracks;
+    }
+    return tracks;
     }
 
     addAlbums(items) {
@@ -211,18 +284,18 @@ export default class ArtistInfo extends React.Component {
         let added = [];
         items.map((album, i) => {
             if (!added.includes(album.name)) {
-            albums.push(
-                <div style={{ display: "flex", padding: 5 }}>
-                    <img src={album.images[2].url} />
-                    <div style={{ paddingLeft: 20 }}>
-                        <div style={{fontStyle: "bold"}}>{album.name}</div>
-                        <div style={{fontSize: 13 }}>{album.release_date.split("-")[0]}</div>
-                    </div>
-                </div>)
-            added.push(album.name);
+                albums.push(
+                    <div style={{ display: "flex", padding: 5 }}>
+                        <img src={album.images[2].url} />
+                        <div style={{ paddingLeft: 20 }}>
+                            <div style={{ fontStyle: "bold" }}>{album.name}</div>
+                            <div style={{ fontSize: 13 }}>{album.release_date.split("-")[0]}</div>
+                        </div>
+                    </div>)
+                added.push(album.name);
             }
         })
-        albums = [<div style={{paddingBottom: 20, fontSize: 20}}>Albums</div>].concat(albums);
+        albums = [<div style={{ paddingBottom: 20, fontSize: 20 }}>Albums</div>].concat(albums);
         this.setState({ albums: albums });
     }
 
@@ -237,7 +310,7 @@ export default class ArtistInfo extends React.Component {
                     </div>
                 </div>)
         })
-        related = [<div style={{paddingBottom: 20, fontSize: 20}}>Related Artists</div>].concat(related);
+        related = [<div style={{ paddingBottom: 20, fontSize: 20 }}>Related Artists</div>].concat(related);
         this.setState({ related: related });
     }
 
@@ -249,8 +322,8 @@ export default class ArtistInfo extends React.Component {
         let artist = this.props.artist;
         let i = this.props.index;
         return (
-            <div style={{ margin: 5, width: 340 }}>
-                <Card style={{margin: 0}}>
+            <div style={{ margin: 5, width: 340 }} hidden={!artist}>
+                <Card style={{ margin: 0 }}>
                     <CardBody style={{ padding: 5 }}>
                         <div style={{ display: "flex" }}>
                             <div>
@@ -270,7 +343,7 @@ export default class ArtistInfo extends React.Component {
                     </CardBody>
                 </Card>
                 <Modal isOpen={this.state.trackModalOpen} toggle={this.toggleTrackModal}>
-                    <ModalBody>{this.state.tracks}</ModalBody>
+                    <ModalBody>{this.addTracks()}</ModalBody>
                 </Modal>
                 <Modal isOpen={this.state.albumModalOpen} toggle={this.toggleAlbumModal}>
                     <ModalBody>{this.state.albums}</ModalBody>
@@ -279,7 +352,7 @@ export default class ArtistInfo extends React.Component {
                     <ModalBody>{this.state.related}</ModalBody>
                 </Modal>
                 <Modal isOpen={this.state.playlistModalOpen} toggle={this.togglePlaylistModal}>
-                    <ModalBody>{this.state.playlistTracks}</ModalBody>
+                    <ModalBody>{this.addPlaylistTracks()}</ModalBody>
                 </Modal>
             </div>
         );
