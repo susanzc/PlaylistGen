@@ -1,1 +1,1 @@
-Simple matching game! More features TBD.
+Made using Spotify API.
