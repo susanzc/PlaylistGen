@@ -202,6 +202,7 @@ export default class ArtistInfo extends React.Component {
                     </div>
                 </div>)
         })
+        topTracks = [<div style={{paddingBottom: 20, fontSize: 20}}>Top Tracks</div>].concat(topTracks);
         this.setState({ tracks: topTracks });
     }
 
@@ -221,6 +222,7 @@ export default class ArtistInfo extends React.Component {
             added.push(album.name);
             }
         })
+        albums = [<div style={{paddingBottom: 20, fontSize: 20}}>Albums</div>].concat(albums);
         this.setState({ albums: albums });
     }
 
@@ -235,6 +237,7 @@ export default class ArtistInfo extends React.Component {
                     </div>
                 </div>)
         })
+        related = [<div style={{paddingBottom: 20, fontSize: 20}}>Related Artists</div>].concat(related);
         this.setState({ related: related });
     }
 
